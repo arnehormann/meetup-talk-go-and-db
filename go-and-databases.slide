@@ -1,0 +1,236 @@
+# see https://godoc.org/golang.org/x/tools/present
+
+Go and Databases
+How do I access my database?
+6 Jul 2017
+
+Arne Hormann
+
+
+* Scope
+
+Direct access, no ORM
+
+Examples based on [[github.com/go-sql-driver/mysql]]
+
+- Import
+- Open
+- Query, QueryRow
+- Exec
+- Prepared statements
+
+
+* Import
+
+.code go-and-databases/all.go /startImport/,/end/ HLdrv
+
+Anonymous import for registration only
+
+Named import to use [[https://godoc.org/github.com/go-sql-driver/mysql][specific features]], e.g.
+
+- NullTime (sql.NullXYZ exists only for bool, float64, int64, string)
+- Error codes without parsing
+- TLS configuration
+- Change logger
+- Reader/Writer for file uploads
+
+
+* Connect
+
+.code go-and-databases/all.go /startOpen/,/end/
+
+Driver specific: name and format of data source name
+
+For github.com/go-sql-driver/mysql the format is
+
+.html go-and-databases/dsn.html
+
+- user:pass@tcp(127.0.0.1:3306)/
+- user@unix(/var/run/mysqld/mysqld.sock)/
+
+Opens a connection pool, not a connection.
+
+No direct control which connection is used!
+
+
+* Note: defer Close()
+
+Never defer in a loop!
+
+Two forms:
+
+Common, short, simple, loses error
+
+.code go-and-databases/all.go /startDCShort/,/end/
+
+Preserve error like this
+
+.code go-and-databases/all.go /startDCDetailed/,/end/
+
+Dealing with Close errors can be tricky...
+
+
+* Query
+
+Only one row, simpler error handling
+
+- QueryRow
+- QueryRowContext
+
+Multiple rows iterated with Next
+
+- Query
+- QueryContext
+
+Use Scan to retrieve values from Row(s)
+
+For INSERT / DELETE / UPDATE, use Exec
+
+
+* Query single row
+
+.play go-and-databases/startqr.go /startQR/,/end/
+
+Scan values into references
+
+Types are converted
+
+Drivers must support [[https://golang.org/pkg/database/sql/driver/#Value][int64, float64, bool, []byte, string, time.Time]]
+
+Null support in database/sql: NullInt64, NullFloat64, NullBool, NullString
+
+Using [[https://golang.org/pkg/database/sql/#RawBytes][sql.RawBytes]] carefuly reduces allocations
+
+
+* Query multiple rows
+
+.play go-and-databases/startqbasic.go /startQBasic/,/end/
+
+
+
+* Query with unkown types
+
+.play go-and-databases/startqrinterface.go /startQRInterface/,/end/
+
+Type is chosen for you
+
+Fun fact: we used prepared statements here
+
+
+
+
+* Prepared statements
+
+.image go-and-databases/exploits_of_a_mom.png
+.caption [[https://xkcd.com/327/][Exploits of a mom]] © Randall Munroe
+
+They are a very, very good idea
+
+Unless you whitelist inputs, use them
+
+They take up resources on server - close after use!
+
+
+* Prepared query
+
+.play go-and-databases/startqprep.go /startQPrep/,/end/
+
+
+* Column information
+
+Before 1.8, just the names
+
+.code go-and-databases/all.go /startQColumnNames/,/end/
+
+Then a lot more
+
+.code go-and-databases/all.go /startQColumns/,/end/
+
+
+* Exec
+
+.play go-and-databases/startebasic.go /startEBasic/,/end/
+
+Shortest query, does nearly nothing (ping)
+
+First return value for last insert id and number of changed rows
+
+- LastInsertID() (int64, error)
+- RowsAffected() (int64, error)
+
+Not relevant for this example...
+
+
+* Insert
+
+Let's collect some Gopher names in this table
+
+.code go-and-databases/all.go /startECreate/,/end/
+
+First, we truncate it (not shown)...
+
+Now start with the original: Gordon
+
+.play go-and-databases/starteinsert.go /startEInsert/,/end/
+
+
+* Select Gophers
+
+.play go-and-databases/starteprepinsertselect.go /startEPrepInsertSelect/,/end/
+
+
+* Prepared Insert
+
+.play go-and-databases/starteprepinsert.go /startEPrepInsert/,/end/
+
+
+* Select Gophers again
+
+.play go-and-databases/starteprepinsertselect.go /startEPrepInsertSelect/,/end/
+
+
+* Context
+
+New since 1.8, improves connection control
+
+Support for deadlines
+
+Support for cancelation
+
+Stores error state
+
+Can store state like a map - try as hard as you can to avoid it
+
+MySLQ lacks cancelation in protocol, Context is difficult
+
+
+* Transactions
+
+Started on Exec("BEGIN")...
+
+No, never do that!
+
+Start a transaction with db.Tx()
+
+- take connection from pool
+- pin the transaction to it
+
+Commit, Rollback, Query*, Exec* - read the api
+
+Careful: some engines - MyISAM - do not support transactions
+
+
+* Really really cool stuff
+
+Soon: request a [[https://tip.golang.org/pkg/database/sql/#DB.Conn][single connection]] for more control
+
+My favorite driver feature
+
+Feed a CSV into MySQL at high speed without any files
+
+See mysql.RegisterReaderHandler(name string, handler func() io.Reader)
+
+Combine it with LOAD DATA LOCAL INFILE
+
+Boom - high speed data pump
+
