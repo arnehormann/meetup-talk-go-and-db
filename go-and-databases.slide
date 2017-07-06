@@ -201,7 +201,7 @@ Stores error state
 
 Can store state like a map - try as hard as you can to avoid it
 
-MySLQ lacks cancelation in protocol, Context is difficult
+MySQL lacks cancelation in protocol, Context is difficult
 
 
 * Transactions
